@@ -5,11 +5,11 @@
 
   <groupId>rximp</groupId>
   <artifactId>java-core</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.0.1-RELEASE</version>
 
   <name>java-core</name>
   <!-- FIXME change it to the project's website -->
-  <url>http://www.example.com</url>
+  <!-- <url>http://www.example.com</url> -->
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -120,4 +120,12 @@
       </plugins>
     </pluginManagement>
   </build>
+
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Jascha Riedel Apache Maven Packages</name>
+      <url>https://maven.pkg.github.com/freelancer1845/rx-imp-java</url>
+    </repository>
+ </distributionManagement>
 </project>
