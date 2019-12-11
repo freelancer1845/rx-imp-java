@@ -27,7 +27,7 @@ import rximp.api.RxImpMessage;
 @Slf4j
 public class RxImpImpl implements RxImp {
 
-    private Charset charset = Charset.forName("UTF-16");
+    private Charset charset = Charset.forName("UTF-8");
 
     private RxImpGateway gateway;
 

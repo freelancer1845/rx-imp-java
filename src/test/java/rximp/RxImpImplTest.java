@@ -12,15 +12,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-import org.slf4j.impl.SimpleLogger;
-import org.slf4j.impl.SimpleLoggerConfiguration;
-import org.slf4j.impl.SimpleLoggerFactory;
-import org.slf4j.spi.LoggerFactoryBinder;
 
 import io.reactivex.observers.TestObserver;
 import io.reactivex.subjects.PublishSubject;
-import lombok.extern.slf4j.Slf4j;
 import rximp.api.RxImp;
 import rximp.api.RxImpException;
 import rximp.api.RxImpGateway;
