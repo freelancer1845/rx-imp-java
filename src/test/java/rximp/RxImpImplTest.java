@@ -99,13 +99,6 @@ public class RxImpImplTest {
                                                                                                     .write("Hello World"));
         inSubject.onNext(rxImp.mapOutgoing(message));
         assertTrue(called.get());
-        // outSubject.subscribe(inSubject); // Connect Input and Output
-
-        // TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World",
-        // String.class)
-        // .test();
-        // tester.awaitCount(1);
-        // tester.assertValue("Hello World");
     }
 
     @Test
