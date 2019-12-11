@@ -39,13 +39,12 @@ public class RxImpImpl implements RxImp {
 
     public RxImpImpl(RxImpGateway gateway) {
         this.gateway = gateway;
-        this._in = gateway.in().map(this::mapIncoming).doOnNext(msg -> log.info("Incoming msg: " + msg.toString()))
+        this._in = gateway.in().map(this::mapIncoming).doOnNext(msg -> log.trace("Incoming msg: " + msg.toString()))
                 .publish().autoConnect();
         this._out = PublishSubject.create();
         this._out.doOnNext(msg -> {
-            log.info("Sending msg: " + msg.toString());
+            log.trace("Sending msg: " + msg.toString());
         }).map(this::mapOutgoing).subscribe(next -> {
-            log.info(new String(next, charset));
             gateway.out().onNext(next);
         });
     }
