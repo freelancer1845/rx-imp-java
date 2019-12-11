@@ -25,9 +25,10 @@ public class RxImpMessage {
     public int count;
     public int rx_state;
 
-    public byte[] payload;
+    
+    public String payload;
 
-    public RxImpMessage(String topic, int count, int rx_state, byte[] payload) {
+    public RxImpMessage(String topic, int count, int rx_state, String payload) {
         this.id = UUID.randomUUID()
                       .toString();
         this.topic = topic;

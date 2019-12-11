@@ -57,14 +57,13 @@ public class RxImpImplTest {
             private ObjectMapper mapper = new ObjectMapper();
 
             @Override
-            public <T> T read(byte[] payload, Class<T> clazz) throws Exception {
+            public <T> T read(String payload, Class<T> clazz) throws Exception {
                 return mapper.readValue(payload, clazz);
             }
 
             @Override
-            public byte[] write(Object payload) throws Exception {
-                return mapper.writeValueAsString(payload)
-                             .getBytes(Charset.forName("UTF-16"));
+            public String write(Object payload) throws Exception {
+                return mapper.writeValueAsString(payload);
             }
 
         };
@@ -76,11 +75,8 @@ public class RxImpImplTest {
     @Test
     public void messagesSubscribeOnCall() throws Exception {
         TestObserver<String> tester = outSubject.map(rxImp::mapIncoming)
-                                                .map(msg -> gateway.mapper()
-                                                                   .read(msg.payload, String.class))
-                                                .test();
-        rxImp.observableCall(TEST_TOPIC, "Hello World", String.class)
-             .subscribe();
+                .map(msg -> gateway.mapper().read(msg.payload, String.class)).test();
+        rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).subscribe();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
     }
@@ -95,8 +91,8 @@ public class RxImpImplTest {
             subj.onComplete();
         }, String.class);
 
-        RxImpMessage message = new RxImpMessage(TEST_TOPIC, 0, RxImpMessage.STATE_SUBSCRIBE, gateway.mapper()
-                                                                                                    .write("Hello World"));
+        RxImpMessage message = new RxImpMessage(TEST_TOPIC, 0, RxImpMessage.STATE_SUBSCRIBE,
+                gateway.mapper().write("Hello World"));
         inSubject.onNext(rxImp.mapOutgoing(message));
         assertTrue(called.get());
     }
@@ -109,8 +105,7 @@ public class RxImpImplTest {
         }, String.class);
 
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class)
-                                           .test();
+        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).test();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
     }
@@ -126,8 +121,7 @@ public class RxImpImplTest {
             subj.onComplete();
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class)
-                                            .test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
         tester.awaitCount(count);
         tester.assertValueCount(count);
     }
@@ -139,8 +133,7 @@ public class RxImpImplTest {
             subj.onError(new IllegalArgumentException("This is not what I wanted!"));
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class)
-                                            .test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
         tester.awaitDone(1, TimeUnit.SECONDS);
         tester.assertError(RxImpException.class);
         tester.assertErrorMessage("This is not what I wanted!");

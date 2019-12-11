@@ -39,42 +39,32 @@ public class RxImpImpl implements RxImp {
 
     public RxImpImpl(RxImpGateway gateway) {
         this.gateway = gateway;
-        this._in = gateway.in()
-                          .map(this::mapIncoming)
-                          .doOnNext(msg -> log.info("Incoming msg: " + msg.toString()))
-                          .publish()
-                          .autoConnect();
+        this._in = gateway.in().map(this::mapIncoming).doOnNext(msg -> log.info("Incoming msg: " + msg.toString()))
+                .publish().autoConnect();
         this._out = PublishSubject.create();
         this._out.doOnNext(msg -> {
             log.info("Sending msg: " + msg.toString());
-        })
-                 .map(this::mapOutgoing)
-                 .subscribe(next -> {
-                     log.info(new String(next, charset));
-                     gateway.out()
-                            .onNext(next);
-                 });
+        }).map(this::mapOutgoing).subscribe(next -> {
+            log.info(new String(next, charset));
+            gateway.out().onNext(next);
+        });
     }
 
     @Override
     public <T> Observable<T> observableCall(String topic, Object payload, Class<T> clazz) throws Exception {
         log.info("Calling: " + topic);
         final Object _payload = payload;
-        RxImpMessage message = new RxImpMessage(topic, 0, RxImpMessage.STATE_SUBSCRIBE, gateway.mapper()
-                                                                                               .write(_payload));
+        RxImpMessage message = new RxImpMessage(topic, 0, RxImpMessage.STATE_SUBSCRIBE,
+                gateway.mapper().write(_payload));
         return Observable.defer(() -> {
 
-            ConnectableObservable<T> obs = _in.filter(msg -> msg.id.equals(message.id))
-                                              .map(this::checkError)
-                                              .takeWhile(this::checkNotComplete)
-                                              .map(msg -> gateway.mapper()
-                                                                 .read(msg.payload, clazz))
-                                              .doOnDispose(() -> {
-                                                  RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 0,
-                                                          RxImpMessage.STATE_DISPOSE, new byte[0]);
-                                                  this._out.onNext(disposeMessage);
-                                              })
-                                              .replay();
+            ConnectableObservable<T> obs = _in.filter(msg -> msg.id.equals(message.id)).map(this::checkError)
+                    .takeWhile(this::checkNotComplete).map(msg -> gateway.mapper().read(msg.payload, clazz))
+                    .doOnDispose(() -> {
+                        RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 0, RxImpMessage.STATE_DISPOSE,
+                                null);
+                        this._out.onNext(disposeMessage);
+                    }).replay();
             obs.connect();
             this._out.onNext(message);
             return obs;
@@ -101,29 +91,24 @@ public class RxImpImpl implements RxImp {
     @Override
     public <T> Disposable registerCall(String topic, BiConsumer<T, Subject<Object>> handler, Class<T> clazz) {
         return this._in.filter(msg -> msg.rx_state == RxImpMessage.STATE_SUBSCRIBE)
-                       .filter(msg -> msg.topic.equals(topic))
-                       .subscribe(msg -> {
-                           PublishSubject<Object> subject = PublishSubject.create();
+                .filter(msg -> msg.topic.equals(topic)).subscribe(msg -> {
+                    PublishSubject<Object> subject = PublishSubject.create();
 
-                           subject.subscribe((next) -> {
-                               RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
-                                       gateway.mapper()
-                                              .write(next));
-                               _out.onNext(nextMsg);
-                           }, (error) -> {
-                               RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_ERROR,
-                                       gateway.mapper()
-                                              .write(error.getMessage()));
-                               _out.onNext(errorMsg);
-                           }, () -> {
-                               RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic, 0,
-                                       RxImpMessage.STATE_COMPLETE, null);
-                               _out.onNext(completeMsg);
-                           });
-                           handler.accept(gateway.mapper()
-                                                 .read(msg.payload, clazz),
-                                   subject);
-                       });
+                    subject.subscribe((next) -> {
+                        RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
+                                gateway.mapper().write(next));
+                        _out.onNext(nextMsg);
+                    }, (error) -> {
+                        RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_ERROR,
+                                gateway.mapper().write(error.getMessage()));
+                        _out.onNext(errorMsg);
+                    }, () -> {
+                        RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_COMPLETE,
+                                null);
+                        _out.onNext(completeMsg);
+                    });
+                    handler.accept(gateway.mapper().read(msg.payload, clazz), subject);
+                });
     }
 
     public RxImpMessage mapIncoming(byte[] data) throws JsonParseException, JsonMappingException, IOException {
@@ -131,7 +116,6 @@ public class RxImpImpl implements RxImp {
     }
 
     public byte[] mapOutgoing(RxImpMessage msg) throws JsonProcessingException {
-        return mapper.writeValueAsString(msg)
-                     .getBytes(charset);
+        return mapper.writeValueAsString(msg).getBytes(charset);
     }
 }
