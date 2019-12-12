@@ -2,7 +2,6 @@ package rximp.impl;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,9 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
-import io.reactivex.functions.BiConsumer;
 import io.reactivex.functions.Function;
-import io.reactivex.observables.ConnectableObservable;
 import io.reactivex.subjects.PublishSubject;
 import io.reactivex.subjects.Subject;
 import lombok.extern.slf4j.Slf4j;
@@ -121,7 +118,7 @@ public class RxImpImpl implements RxImp {
                     handler.apply(gateway.mapper().read(msg.payload, clazz))
                             .takeUntil(this._in.filter(disposeMsg -> disposeMsg.rx_state == RxImpMessage.STATE_DISPOSE)
                                     .filter(disposeMsg -> disposeMsg.id.equals(msg.id))
-                                    .doOnNext(n -> log.info("Disposed by Caller")))
+                                    .doOnNext(n -> log.trace("Disposed by Caller. " + topic + " id: " + n.id)))
                             .subscribe((next) -> {
                                 RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
                                         gateway.mapper().write(next));
