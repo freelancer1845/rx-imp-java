@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.BiConsumer;
+import io.reactivex.functions.Function;
 import io.reactivex.observables.ConnectableObservable;
 import io.reactivex.subjects.PublishSubject;
 import io.reactivex.subjects.Subject;
@@ -51,23 +52,49 @@ public class RxImpImpl implements RxImp {
 
     @Override
     public <T> Observable<T> observableCall(String topic, Object payload, Class<T> clazz) throws Exception {
-        log.info("Calling: " + topic);
+        log.trace("Calling: " + topic);
         final Object _payload = payload;
         RxImpMessage message = new RxImpMessage(topic, 0, RxImpMessage.STATE_SUBSCRIBE,
                 gateway.mapper().write(_payload));
-        return Observable.defer(() -> {
 
-            ConnectableObservable<T> obs = _in.filter(msg -> msg.id.equals(message.id)).map(this::checkError)
-                    .takeWhile(this::checkNotComplete).map(msg -> gateway.mapper().read(msg.payload, clazz))
-                    .doOnDispose(() -> {
+        return Observable.create(emitter -> {
+
+            Disposable disposable = this._in.filter(msg -> {
+                return msg.id.equals(message.id);
+            }).filter(msg -> msg.rx_state == RxImpMessage.STATE_COMPLETE || msg.rx_state == RxImpMessage.STATE_ERROR
+                    || msg.rx_state == RxImpMessage.STATE_NEXT).map(this::checkError).takeWhile(this::checkNotComplete)
+                    .map(msg -> {
+                        if (msg.payload != null) {
+                            return gateway.mapper().read(msg.payload, clazz);
+                        } else {
+                            return gateway.mapper().read("", clazz);
+                        }
+
+                    }).doOnDispose(() -> {
                         RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 0, RxImpMessage.STATE_DISPOSE,
                                 null);
                         this._out.onNext(disposeMessage);
-                    }).replay();
-            obs.connect();
+                    }).subscribe(next -> emitter.onNext(next), error -> emitter.onError(error),
+                            () -> emitter.onComplete());
             this._out.onNext(message);
-            return obs;
+            emitter.setDisposable(disposable);
         });
+
+        // return Observable.defer(() -> {
+        // Observable<T> obs = this._in.filter(msg -> {
+        // return msg.id.equals(message.id);
+        // }).filter(msg -> {
+        // return msg.rx_state != RxImpMessage.STATE_SUBSCRIBE;
+        // }).map(this::checkError).takeWhile(this::checkNotComplete)
+        // .map(msg -> gateway.mapper().read(msg.payload, clazz)).doOnDispose(() -> {
+        // RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 0,
+        // RxImpMessage.STATE_DISPOSE,
+        // null);
+        // this._out.onNext(disposeMessage);
+        // });
+        // this._out.onNext(message);
+        // return obs;
+        // }).share().doOnNext(n -> System.out.println("Next"));
     }
 
     private RxImpMessage checkError(RxImpMessage msg)
@@ -88,25 +115,26 @@ public class RxImpImpl implements RxImp {
     }
 
     @Override
-    public <T> Disposable registerCall(String topic, BiConsumer<T, Subject<Object>> handler, Class<T> clazz) {
+    public <T> Disposable registerCall(String topic, Function<T, Observable<?>> handler, Class<T> clazz) {
         return this._in.filter(msg -> msg.rx_state == RxImpMessage.STATE_SUBSCRIBE)
                 .filter(msg -> msg.topic.equals(topic)).subscribe(msg -> {
-                    PublishSubject<Object> subject = PublishSubject.create();
-
-                    subject.subscribe((next) -> {
-                        RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
-                                gateway.mapper().write(next));
-                        _out.onNext(nextMsg);
-                    }, (error) -> {
-                        RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_ERROR,
-                                gateway.mapper().write(error.getMessage()));
-                        _out.onNext(errorMsg);
-                    }, () -> {
-                        RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_COMPLETE,
-                                null);
-                        _out.onNext(completeMsg);
-                    });
-                    handler.accept(gateway.mapper().read(msg.payload, clazz), subject);
+                    handler.apply(gateway.mapper().read(msg.payload, clazz))
+                            .takeUntil(this._in.filter(disposeMsg -> disposeMsg.rx_state == RxImpMessage.STATE_DISPOSE)
+                                    .filter(disposeMsg -> disposeMsg.id.equals(msg.id))
+                                    .doOnNext(n -> log.info("Disposed by Caller")))
+                            .subscribe((next) -> {
+                                RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
+                                        gateway.mapper().write(next));
+                                _out.onNext(nextMsg);
+                            }, (error) -> {
+                                RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_ERROR,
+                                        gateway.mapper().write(error.getMessage()));
+                                _out.onNext(errorMsg);
+                            }, () -> {
+                                RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic, 0,
+                                        RxImpMessage.STATE_COMPLETE, null);
+                                _out.onNext(completeMsg);
+                            });
                 });
     }
 

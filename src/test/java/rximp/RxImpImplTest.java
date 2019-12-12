@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.nio.charset.Charset;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -13,7 +12,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.reactivex.Observable;
 import io.reactivex.observers.TestObserver;
+import io.reactivex.subjects.AsyncSubject;
 import io.reactivex.subjects.PublishSubject;
 import rximp.api.RxImp;
 import rximp.api.RxImpException;
@@ -85,10 +86,9 @@ public class RxImpImplTest {
     public void registerCatchesSubscriptions() throws Exception {
         AtomicBoolean called = new AtomicBoolean();
         called.set(false);
-        rxImp.registerCall(TEST_TOPIC, (args, subj) -> {
+        rxImp.registerCall(TEST_TOPIC, (args) -> {
             called.set(true);
-            subj.onNext(args);
-            subj.onComplete();
+            return Observable.just(args);
         }, String.class);
 
         RxImpMessage message = new RxImpMessage(TEST_TOPIC, 0, RxImpMessage.STATE_SUBSCRIBE,
@@ -99,9 +99,8 @@ public class RxImpImplTest {
 
     @Test
     public void simpleConnection() throws Exception {
-        rxImp.registerCall(TEST_TOPIC, (args, subj) -> {
-            subj.onNext(args);
-            subj.onComplete();
+        rxImp.registerCall(TEST_TOPIC, (args) -> {
+            return Observable.just(args);
         }, String.class);
 
         outSubject.subscribe(inSubject); // Connect Input and Output
@@ -114,11 +113,8 @@ public class RxImpImplTest {
     public void floodingConnection() throws Exception {
 
         int count = 100000;
-        rxImp.registerCall(TEST_TOPIC, (args, subj) -> {
-            for (int i = 0; i < args; i++) {
-                subj.onNext(i);
-            }
-            subj.onComplete();
+        rxImp.registerCall(TEST_TOPIC, (args) -> {
+            return Observable.range(0, args);
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
         TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
@@ -129,13 +125,31 @@ public class RxImpImplTest {
     @Test
     public void throwsError() throws Exception {
         int count = 100000;
-        rxImp.registerCall(TEST_TOPIC, (args, subj) -> {
-            subj.onError(new IllegalArgumentException("This is not what I wanted!"));
+        rxImp.registerCall(TEST_TOPIC, (args) -> {
+            return Observable.error(new IllegalArgumentException("This is not what I wanted!"));
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
         TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
         tester.awaitDone(1, TimeUnit.SECONDS);
         tester.assertError(RxImpException.class);
         tester.assertErrorMessage("This is not what I wanted!");
+    }
+
+    @Test
+    public void detectsUnsubscribeAndRelaysIt() throws Exception {
+        outSubject.subscribe(inSubject); // Connect Input and Output
+
+        AsyncSubject<Object> disposeTester = AsyncSubject.create();
+        rxImp.registerCall(TEST_TOPIC, (args) -> {
+            return Observable.interval(10, TimeUnit.MILLISECONDS).take(10)
+                    .doOnDispose(() -> disposeTester.onComplete());
+        }, String.class);
+
+        TestObserver<Object> disposeObs = disposeTester.test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", Integer.class).take(5).test();
+        tester.awaitCount(5);
+        tester.assertResult(0, 1, 2, 3, 4);
+        Thread.sleep(10);
+        disposeObs.assertComplete();
     }
 }
