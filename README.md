@@ -8,6 +8,109 @@
 * [Javascript/Typescript](https://github.com/freelancer1845/rx-imp-js)
 
 
+## Example using ZeroMQ (JeroMQ)
+
+* Simple Pair connection using zmq
+```java
+// YOUR PACKAGE DEFINITION package de.riedeldev.rx.imp.testing.backend; 
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.zeromq.SocketType;
+import org.zeromq.ZContext;
+import org.zeromq.ZMQ;
+
+import io.reactivex.Observable;
+import io.reactivex.subjects.PublishSubject;
+import io.reactivex.subjects.Subject;
+import rximp.api.RxImp;
+import rximp.api.RxImpGateway;
+import rximp.api.RxImpMapper;
+import rximp.impl.RxImpImpl;
+
+/**
+ * ZeroMQApplication
+ */
+public class ZeroMQApplication {
+
+    public static void main(String[] args) throws InterruptedException {
+        PublishSubject<byte[]> out = PublishSubject.create();
+        PublishSubject<byte[]> in = PublishSubject.create();
+        RxImpMapper mapper = new RxImpMapper() {
+            ObjectMapper mapper = new ObjectMapper();
+
+            @Override
+            public String write(Object arg0) throws Exception {
+                return mapper.writeValueAsString(arg0);
+            }
+
+            @Override
+            public <T> T read(String arg0, Class<T> arg1) throws Exception {
+                return mapper.readValue(arg0, arg1);
+            }
+        };
+        RxImpGateway gateway = new RxImpGateway() {
+
+            @Override
+            public Subject<byte[]> out() {
+                return out;
+            }
+
+            @Override
+            public RxImpMapper mapper() {
+                return mapper;
+            }
+
+            @Override
+            public Observable<byte[]> in() {
+                return in;
+            }
+        };
+
+        RxImp rxImp = new RxImpImpl(gateway);
+        List<byte[]> outqueue = new CopyOnWriteArrayList<>();
+        out.buffer(2, TimeUnit.MILLISECONDS).subscribe(next -> outqueue.addAll(next));
+
+        Observable.interval(1000, TimeUnit.MILLISECONDS).subscribe(t -> {
+            long start = System.currentTimeMillis();
+            rxImp.observableCall("pingpong", 0, Long.class).timeout(1, TimeUnit.SECONDS).subscribe(s -> {
+                long timeNeeded = System.currentTimeMillis() - start;
+                System.out.println("Ping Time: " + timeNeeded);
+
+            }, err -> System.out.println("Ping Pong Timed out"));
+        });
+
+        rxImp.registerCall("pingpong", (test) -> Observable.just(0), Long.class);
+        try (ZContext context = new ZContext()) {
+            ZMQ.Socket socket = context.createSocket(SocketType.PAIR);
+            socket.connect("tcp://localhost:5555");
+            while (!Thread.currentThread().isInterrupted()) {
+
+                byte[] reply = socket.recv(ZMQ.DONTWAIT);
+                if (reply != null) {
+                    in.onNext(reply);
+                }
+                for (int i = 0; i < outqueue.size(); i++) {
+                    if (i > 10) {
+                        break;
+                    }
+                    byte[] msg = outqueue.remove(i);
+                    socket.send(msg);
+                }
+                Thread.sleep(1);
+            }
+
+        }
+    }
+}
+```
+
+
+
 ## Example using spring boot
 
 ### Create WebSocketConfigurer class and a Annotation interface
