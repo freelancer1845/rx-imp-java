@@ -35,7 +35,15 @@ public class RxImpImpl implements RxImp {
 
     private ObjectMapper mapper = new ObjectMapper();
 
+    public RxImpImpl(Observable<byte[]> inStream, Subject<byte[]> outStream) {
+        constructFromGateway(new RxImpStandardGateway(inStream, outStream));
+    }
+
     public RxImpImpl(RxImpGateway gateway) {
+        constructFromGateway(gateway);
+    }
+
+    private void constructFromGateway(RxImpGateway gateway) {
         this.gateway = gateway;
         this._in = gateway.in().map(this::mapIncoming).doOnNext(msg -> log.trace("Incoming msg: " + msg.toString()))
                 .publish().autoConnect();

@@ -19,7 +19,6 @@ import io.reactivex.subjects.PublishSubject;
 import rximp.api.RxImp;
 import rximp.api.RxImpException;
 import rximp.api.RxImpGateway;
-import rximp.api.RxImpMapper;
 import rximp.api.RxImpMessage;
 import rximp.impl.RxImpImpl;
 
@@ -47,36 +46,17 @@ public class RxImpImplTest {
     @BeforeEach
     public void beforeEach() {
         System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "OFF");
-        gateway = mock(RxImpGateway.class);
         inSubject = PublishSubject.create();
         outSubject = PublishSubject.create();
-        when(gateway.in()).thenReturn(inSubject);
-        when(gateway.out()).thenReturn(outSubject);
-
-        RxImpMapper mapper = new RxImpMapper() {
-
-            private ObjectMapper mapper = new ObjectMapper();
-
-            @Override
-            public <T> T read(String payload, Class<T> clazz) throws Exception {
-                return mapper.readValue(payload, clazz);
-            }
-
-            @Override
-            public String write(Object payload) throws Exception {
-                return mapper.writeValueAsString(payload);
-            }
-
-        };
-        when(gateway.mapper()).thenReturn(mapper);
-
-        rxImp = new RxImpImpl(gateway);
+        rxImp = new RxImpImpl(inSubject, outSubject);
     }
 
     @Test
     public void messagesSubscribeOnCall() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
         TestObserver<String> tester = outSubject.map(rxImp::mapIncoming)
-                .map(msg -> gateway.mapper().read(msg.payload, String.class)).test();
+                .map(msg -> mapper.readValue(msg.payload, String.class)).test();
         rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).subscribe();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
@@ -91,8 +71,10 @@ public class RxImpImplTest {
             return Observable.just(args);
         }, String.class);
 
+        ObjectMapper mapper = new ObjectMapper();
+
         RxImpMessage message = new RxImpMessage(TEST_TOPIC, 0, RxImpMessage.STATE_SUBSCRIBE,
-                gateway.mapper().write("Hello World"));
+                mapper.writeValueAsString("Hello World"));
         inSubject.onNext(rxImp.mapOutgoing(message));
         assertTrue(called.get());
     }
