@@ -40,38 +40,8 @@ public class ZeroMQApplication {
     public static void main(String[] args) throws InterruptedException {
         PublishSubject<byte[]> out = PublishSubject.create();
         PublishSubject<byte[]> in = PublishSubject.create();
-        RxImpMapper mapper = new RxImpMapper() {
-            ObjectMapper mapper = new ObjectMapper();
 
-            @Override
-            public String write(Object arg0) throws Exception {
-                return mapper.writeValueAsString(arg0);
-            }
-
-            @Override
-            public <T> T read(String arg0, Class<T> arg1) throws Exception {
-                return mapper.readValue(arg0, arg1);
-            }
-        };
-        RxImpGateway gateway = new RxImpGateway() {
-
-            @Override
-            public Subject<byte[]> out() {
-                return out;
-            }
-
-            @Override
-            public RxImpMapper mapper() {
-                return mapper;
-            }
-
-            @Override
-            public Observable<byte[]> in() {
-                return in;
-            }
-        };
-
-        RxImp rxImp = new RxImpImpl(gateway);
+        RxImp rxImp = new RxImpImpl(in, out);
         List<byte[]> outqueue = new CopyOnWriteArrayList<>();
         out.buffer(2, TimeUnit.MILLISECONDS).subscribe(next -> outqueue.addAll(next));
 
