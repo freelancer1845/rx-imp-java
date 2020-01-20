@@ -2,6 +2,9 @@ package rximp.impl;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -63,24 +66,38 @@ public class RxImpImpl implements RxImp {
                 gateway.mapper().write(_payload));
 
         return Observable.create(emitter -> {
-
-            Disposable disposable = this._in.filter(msg -> {
+            PublishSubject<RxImpMessage> publisher = PublishSubject.create();
+            AtomicInteger currentCount = new AtomicInteger(0);
+            List<RxImpMessage> queue = new CopyOnWriteArrayList<>();
+            Disposable secondDisposable = this._in.filter(msg -> {
                 return msg.id.equals(message.id);
             }).filter(msg -> msg.rx_state == RxImpMessage.STATE_COMPLETE || msg.rx_state == RxImpMessage.STATE_ERROR
-                    || msg.rx_state == RxImpMessage.STATE_NEXT).map(this::checkError).takeWhile(this::checkNotComplete)
-                    .map(msg -> {
-                        if (msg.payload != null) {
-                            return gateway.mapper().read(msg.payload, clazz);
-                        } else {
-                            return gateway.mapper().read("", clazz);
-                        }
+                    || msg.rx_state == RxImpMessage.STATE_NEXT).map(this::checkError).subscribe(msg -> {
+                        currentCount.incrementAndGet();
+                        queue.add(msg);
+                        queue.sort((a, b) -> Integer.compare(a.count, b.count));
+                        queue.removeIf(t -> {
+                            if (t.count < currentCount.get()) {
+                                publisher.onNext(t);
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        });
+                    }, error -> publisher.onError(error));
 
-                    }).doOnDispose(() -> {
-                        RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 0, RxImpMessage.STATE_DISPOSE,
-                                null);
-                        this._out.onNext(disposeMessage);
-                    }).subscribe(next -> emitter.onNext(next), error -> emitter.onError(error),
-                            () -> emitter.onComplete());
+            Disposable disposable = publisher.takeWhile(this::checkNotComplete).map(msg -> {
+                if (msg.payload != null) {
+                    return gateway.mapper().read(msg.payload, clazz);
+                } else {
+                    return gateway.mapper().read("", clazz);
+                }
+
+            }).doOnDispose(() -> {
+                RxImpMessage disposeMessage = new RxImpMessage(message.id, topic, 1, RxImpMessage.STATE_DISPOSE, null);
+                this._out.onNext(disposeMessage);
+                secondDisposable.dispose();
+            }).subscribe(next -> emitter.onNext(next), error -> emitter.onError(error), () -> emitter.onComplete());
             this._out.onNext(message);
             emitter.setDisposable(disposable);
         });
@@ -121,6 +138,7 @@ public class RxImpImpl implements RxImp {
 
     @Override
     public <T> Disposable registerCall(String topic, Function<T, Observable<?>> handler, Class<T> clazz) {
+        AtomicInteger currentCount = new AtomicInteger(0);
         return this._in.filter(msg -> msg.rx_state == RxImpMessage.STATE_SUBSCRIBE)
                 .filter(msg -> msg.topic.equals(topic)).subscribe(msg -> {
                     handler.apply(gateway.mapper().read(msg.payload, clazz))
@@ -128,16 +146,18 @@ public class RxImpImpl implements RxImp {
                                     .filter(disposeMsg -> disposeMsg.id.equals(msg.id))
                                     .doOnNext(n -> log.trace("Disposed by Caller. " + topic + " id: " + n.id)))
                             .subscribe((next) -> {
-                                RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_NEXT,
+                                RxImpMessage nextMsg = new RxImpMessage(msg.id, msg.topic,
+                                        currentCount.getAndIncrement(), RxImpMessage.STATE_NEXT,
                                         gateway.mapper().write(next));
                                 _out.onNext(nextMsg);
                             }, (error) -> {
-                                RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic, 0, RxImpMessage.STATE_ERROR,
+                                RxImpMessage errorMsg = new RxImpMessage(msg.id, msg.topic,
+                                        currentCount.getAndIncrement(), RxImpMessage.STATE_ERROR,
                                         gateway.mapper().write(error.getMessage()));
                                 _out.onNext(errorMsg);
                             }, () -> {
-                                RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic, 0,
-                                        RxImpMessage.STATE_COMPLETE, null);
+                                RxImpMessage completeMsg = new RxImpMessage(msg.id, msg.topic,
+                                        currentCount.getAndIncrement(), RxImpMessage.STATE_COMPLETE, null);
                                 _out.onNext(completeMsg);
                             });
                 });

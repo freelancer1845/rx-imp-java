@@ -134,4 +134,22 @@ public class RxImpImplTest {
         Thread.sleep(10);
         disposeObs.assertComplete();
     }
+
+    @Test
+    public void sortsMessages() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        outSubject.map(rxImp::mapIncoming).subscribe(t -> {
+
+            RxImpMessage next = new RxImpMessage(t.id, TEST_TOPIC, 0, RxImpMessage.STATE_NEXT,
+                    mapper.writeValueAsString("Hello World"));
+            RxImpMessage cmp = new RxImpMessage(t.id, TEST_TOPIC, 1, RxImpMessage.STATE_COMPLETE,
+                    mapper.writeValueAsString("Hello World"));
+            inSubject.onNext(rxImp.mapOutgoing(cmp));
+            inSubject.onNext(rxImp.mapOutgoing(next));
+        });
+        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).test();
+        tester.awaitCount(1);
+        tester.assertValue("Hello World");
+    }
 }
