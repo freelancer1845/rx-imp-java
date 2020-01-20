@@ -138,9 +138,9 @@ public class RxImpImpl implements RxImp {
 
     @Override
     public <T> Disposable registerCall(String topic, Function<T, Observable<?>> handler, Class<T> clazz) {
-        AtomicInteger currentCount = new AtomicInteger(0);
         return this._in.filter(msg -> msg.rx_state == RxImpMessage.STATE_SUBSCRIBE)
                 .filter(msg -> msg.topic.equals(topic)).subscribe(msg -> {
+                    AtomicInteger currentCount = new AtomicInteger(0);
                     handler.apply(gateway.mapper().read(msg.payload, clazz))
                             .takeUntil(this._in.filter(disposeMsg -> disposeMsg.rx_state == RxImpMessage.STATE_DISPOSE)
                                     .filter(disposeMsg -> disposeMsg.id.equals(msg.id))
