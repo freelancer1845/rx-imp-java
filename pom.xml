@@ -5,7 +5,7 @@
 
   <groupId>rximp</groupId>
   <artifactId>java-core</artifactId>
-  <version>0.1.2-RELEASE</version>
+  <version>0.1.3-RELEASE</version>
 
   <name>java-core</name>
   <!-- FIXME change it to the project's website -->
@@ -70,6 +70,20 @@
     </dependency>
 
 
+    <!-- https://mvnrepository.com/artifact/org.springframework/spring-websocket -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-websocket</artifactId>
+      <version>5.2.3.RELEASE</version>
+    </dependency>
+    <!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.datatype/jackson-datatype-jsr310 -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+      <version>2.10.1</version>
+    </dependency>
+
+
   </dependencies>
 
   <build>
@@ -127,5 +141,5 @@
       <name>GitHub Jascha Riedel Apache Maven Packages</name>
       <url>https://maven.pkg.github.com/freelancer1845/rx-imp-java</url>
     </repository>
- </distributionManagement>
+  </distributionManagement>
 </project>
