@@ -85,7 +85,7 @@ public class RxImpSpringWebsocketHandler extends BinaryWebSocketHandler implemen
                         .takeUntil(this._closingSessions.filter(sess -> sess.getId().equals(session.getId())).take(1));
             }, parameterType);
         }
-        ConcurrentWebSocketSessionDecorator decorator = new ConcurrentWebSocketSessionDecorator(session, 1000, 1000000);
+        ConcurrentWebSocketSessionDecorator decorator = new ConcurrentWebSocketSessionDecorator(session, 10000, 1000000);
         gateway._subject.subscribe(data -> {
             if (decorator.isOpen()) {
                 decorator.sendMessage(new BinaryMessage(data));
