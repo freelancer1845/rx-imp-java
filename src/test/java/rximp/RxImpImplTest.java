@@ -12,10 +12,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.reactivex.Observable;
-import io.reactivex.observers.TestObserver;
-import io.reactivex.subjects.AsyncSubject;
-import io.reactivex.subjects.PublishSubject;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.observers.TestObserver;
+import io.reactivex.rxjava3.subjects.AsyncSubject;
+import io.reactivex.rxjava3.subjects.PublishSubject;
 import rximp.api.RxImp;
 import rximp.api.RxImpException;
 import rximp.api.RxImpGateway;
@@ -114,7 +114,7 @@ public class RxImpImplTest {
         TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
         tester.awaitDone(1, TimeUnit.SECONDS);
         tester.assertError(RxImpException.class);
-        tester.assertErrorMessage("This is not what I wanted!");
+        tester.assertError(t -> t.getMessage().equals("This is not what I wanted!"));
     }
 
     @Test
