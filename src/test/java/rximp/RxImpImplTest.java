@@ -16,7 +16,6 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.observers.TestObserver;
 import io.reactivex.rxjava3.subjects.AsyncSubject;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import rximp.api.RxImp;
 import rximp.api.RxImpException;
 import rximp.api.RxImpGateway;
 import rximp.api.RxImpMessage;
@@ -40,7 +39,7 @@ public class RxImpImplTest {
         when(gateway.in()).thenReturn(inSubject);
         when(gateway.out()).thenReturn(outSubject);
 
-        RxImp rxImp = new RxImpImpl(gateway);
+        new RxImpImpl(gateway);
     }
 
     @BeforeEach
@@ -56,8 +55,10 @@ public class RxImpImplTest {
         ObjectMapper mapper = new ObjectMapper();
 
         TestObserver<String> tester = outSubject.map(rxImp::mapIncoming)
-                .map(msg -> mapper.readValue(msg.payload, String.class)).test();
-        rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).subscribe();
+                                                .map(msg -> mapper.readValue(msg.payload, String.class))
+                                                .test();
+        rxImp.observableCall(TEST_TOPIC, "Hello World", String.class)
+             .subscribe();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
     }
@@ -86,7 +87,8 @@ public class RxImpImplTest {
         }, String.class);
 
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).test();
+        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class)
+                                           .test();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
     }
@@ -99,7 +101,8 @@ public class RxImpImplTest {
             return Observable.range(0, args);
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class)
+                                            .test();
         tester.awaitCount(count);
         tester.assertValueCount(count);
     }
@@ -111,10 +114,12 @@ public class RxImpImplTest {
             return Observable.error(new IllegalArgumentException("This is not what I wanted!"));
         }, Integer.class);
         outSubject.subscribe(inSubject); // Connect Input and Output
-        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class).test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, count, Integer.class)
+                                            .test();
         tester.awaitDone(1, TimeUnit.SECONDS);
         tester.assertError(RxImpException.class);
-        tester.assertError(t -> t.getMessage().equals("This is not what I wanted!"));
+        tester.assertError(t -> t.getMessage()
+                                 .equals("This is not what I wanted!"));
     }
 
     @Test
@@ -123,12 +128,15 @@ public class RxImpImplTest {
 
         AsyncSubject<Object> disposeTester = AsyncSubject.create();
         rxImp.registerCall(TEST_TOPIC, (args) -> {
-            return Observable.interval(10, TimeUnit.MILLISECONDS).take(10)
-                    .doOnDispose(() -> disposeTester.onComplete());
+            return Observable.interval(10, TimeUnit.MILLISECONDS)
+                             .take(10)
+                             .doOnDispose(() -> disposeTester.onComplete());
         }, String.class);
 
         TestObserver<Object> disposeObs = disposeTester.test();
-        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", Integer.class).take(5).test();
+        TestObserver<Integer> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", Integer.class)
+                                            .take(5)
+                                            .test();
         tester.awaitCount(5);
         tester.assertResult(0, 1, 2, 3, 4);
         Thread.sleep(10);
@@ -139,16 +147,18 @@ public class RxImpImplTest {
     public void sortsMessages() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
 
-        outSubject.map(rxImp::mapIncoming).subscribe(t -> {
+        outSubject.map(rxImp::mapIncoming)
+                  .subscribe(t -> {
 
-            RxImpMessage next = new RxImpMessage(t.id, TEST_TOPIC, 0, RxImpMessage.STATE_NEXT,
-                    mapper.writeValueAsString("Hello World"));
-            RxImpMessage cmp = new RxImpMessage(t.id, TEST_TOPIC, 1, RxImpMessage.STATE_COMPLETE,
-                    mapper.writeValueAsString("Hello World"));
-            inSubject.onNext(rxImp.mapOutgoing(cmp));
-            inSubject.onNext(rxImp.mapOutgoing(next));
-        });
-        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class).test();
+                      RxImpMessage next = new RxImpMessage(t.id, TEST_TOPIC, 0, RxImpMessage.STATE_NEXT,
+                              mapper.writeValueAsString("Hello World"));
+                      RxImpMessage cmp = new RxImpMessage(t.id, TEST_TOPIC, 1, RxImpMessage.STATE_COMPLETE,
+                              mapper.writeValueAsString("Hello World"));
+                      inSubject.onNext(rxImp.mapOutgoing(cmp));
+                      inSubject.onNext(rxImp.mapOutgoing(next));
+                  });
+        TestObserver<String> tester = rxImp.observableCall(TEST_TOPIC, "Hello World", String.class)
+                                           .test();
         tester.awaitCount(1);
         tester.assertValue("Hello World");
     }
